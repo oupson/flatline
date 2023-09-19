@@ -1,0 +1,20 @@
+[package]
+name = "flatline"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+adw = { git = "https://gitlab.gnome.org/World/Rust/libadwaita-rs.git", package = "libadwaita", features = ["v1_3"] }
+gtk = { git = "https://github.com/gtk-rs/gtk4-rs.git", package = "gtk4", features = ["v4_12"] }
+vte4 = { git = "https://gitlab.gnome.org/World/Rust/vte4-rs.git" }
+glib = { git = "https://github.com/gtk-rs/gtk-rs-core", package = "glib" }
+gio = { git = "https://github.com/gtk-rs/gtk-rs-core", package = "gio" }
+tracing = "0.1.37"
+tracing-subscriber = "0.3.17"
+russh = { version = "0.38.0", features = ["vendored-openssl"] }
+tokio = { version = "1.32.0", features = ["rt"] }
+libc = "0.2.148"
+async-trait = "0.1"
+russh-keys = { version = "0.38.0", features = ["vendored-openssl"] }
