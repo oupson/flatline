@@ -5,7 +5,10 @@ use std::{
 };
 
 use russh_keys::{agent::client::AgentClient, key::PublicKey};
-use tokio::io::{unix::AsyncFd, AsyncRead, Interest};
+use tokio::{
+    io::{unix::AsyncFd, AsyncRead, Interest},
+    net::ToSocketAddrs,
+};
 use tracing::{error, trace};
 
 struct Client {}
@@ -68,7 +71,10 @@ impl AsyncRead for AsyncPty {
     }
 }
 
-pub async fn ssh(slave_pty: i32) {
+pub async fn ssh<A>(server_addr: A, slave_pty: i32)
+where
+    A: ToSocketAddrs,
+{
     unsafe {
         let flags = libc::fcntl(slave_pty, libc::F_GETFL, 0);
         libc::fcntl(slave_pty, libc::F_SETFL, flags | libc::O_NONBLOCK);
@@ -84,7 +90,7 @@ pub async fn ssh(slave_pty: i32) {
     let config = Arc::new(config);
 
     let sh = Client {};
-    let mut session = russh::client::connect(config, std::env::var("SSH_SERVER").unwrap(), sh)
+    let mut session = russh::client::connect(config, server_addr, sh)
         .await
         .unwrap();
 

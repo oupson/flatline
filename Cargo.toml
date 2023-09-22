@@ -18,3 +18,10 @@ tokio = { version = "1.32.0", features = ["rt"] }
 libc = "0.2.148"
 async-trait = "0.1"
 russh-keys = { version = "0.38.0", features = ["vendored-openssl"] }
+anyhow = "1.0.75"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
