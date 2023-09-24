@@ -1,11 +1,9 @@
 use std::{
     cell::{OnceCell, RefCell},
-    mem::MaybeUninit,
-    os::fd::{FromRawFd, OwnedFd, RawFd},
     thread::JoinHandle,
 };
 
-use anyhow::Ok;
+use anyhow::{Context, Ok};
 use glib::{
     subclass::{
         prelude::{DerivedObjectProperties, ObjectImpl, ObjectImplExt},
@@ -19,8 +17,6 @@ use gtk::{
 };
 use tracing::error;
 use vte4::{BoxExt, Pty, Terminal, TerminalExt, WidgetExt};
-
-use crate::{ssh, LibcResultExt};
 
 #[derive(glib::Properties)]
 #[properties(wrapper_type = super::RemotePane)]
@@ -38,7 +34,11 @@ pub struct RemotePane {
 
 impl Default for RemotePane {
     fn default() -> Self {
-        let term = Terminal::builder().hexpand(true).vexpand(true).build();
+        let term = Terminal::builder()
+            .hexpand(true)
+            .vexpand(true)
+            .enable_sixel(true)
+            .build();
 
         Self {
             term,
@@ -101,8 +101,9 @@ impl RemotePane {
 
         let addr_with_port = format!("{}:{}", addr, port);
 
-        let (master_pty, slave_pty) = Self::setup_pty()?;
-        self.term.set_pty(Some(&master_pty));
+        let (master_pty, slave_pty) = crate::util::open_pty().context("Failed to open pty")?;
+        let vte_pty = Pty::foreign_sync(master_pty, None::<&gio::Cancellable>)?;
+        self.term.set_pty(Some(&vte_pty));
 
         let handle = std::thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -110,40 +111,10 @@ impl RemotePane {
                 .build()
                 .unwrap();
 
-            rt.block_on(ssh::ssh(addr_with_port, slave_pty));
+            rt.block_on(crate::ssh::ssh(addr_with_port, slave_pty));
         });
         self.thread_handle.set(Some(handle));
 
         Ok(())
-    }
-
-    fn setup_pty() -> anyhow::Result<(Pty, RawFd)> {
-        unsafe {
-            let master_pty = libc::posix_openpt(libc::O_RDWR).as_result()?;
-
-            let mut settings = MaybeUninit::<libc::termios>::uninit();
-
-            libc::tcgetattr(master_pty, settings.as_mut_ptr()).as_result()?;
-
-            libc::cfmakeraw(settings.as_mut_ptr());
-
-            libc::tcsetattr(master_pty, libc::TCSANOW, settings.as_mut_ptr()).as_result()?;
-
-            libc::grantpt(master_pty).as_result()?;
-
-            libc::unlockpt(master_pty).as_result()?;
-
-            let pts_name = libc::ptsname(master_pty);
-            if pts_name.is_null() {
-                return Err(anyhow::Error::msg("failed to get pts name"));
-            }
-
-            let slave_pty = libc::open(pts_name, libc::O_RDWR).as_result()?;
-
-            let vte_pty =
-                Pty::foreign_sync(OwnedFd::from_raw_fd(master_pty), None::<&gio::Cancellable>)?;
-
-            Ok((vte_pty, slave_pty))
-        }
     }
 }

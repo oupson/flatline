@@ -1,6 +1,6 @@
 use std::{
     ffi::CStr,
-    os::fd::{AsRawFd, RawFd},
+    os::fd::{AsRawFd, RawFd, OwnedFd},
     sync::Arc,
 };
 
@@ -71,15 +71,10 @@ impl AsyncRead for AsyncPty {
     }
 }
 
-pub async fn ssh<A>(server_addr: A, slave_pty: i32)
+pub async fn ssh<A>(server_addr: A, slave_pty: OwnedFd)
 where
     A: ToSocketAddrs,
 {
-    unsafe {
-        let flags = libc::fcntl(slave_pty, libc::F_GETFL, 0);
-        libc::fcntl(slave_pty, libc::F_SETFL, flags | libc::O_NONBLOCK);
-    }
-
     let slave_file = tokio::io::unix::AsyncFd::new(slave_pty).unwrap();
 
     let mut client = AgentClient::connect_env().await.unwrap();
@@ -141,7 +136,7 @@ where
                 if let Some(msg) = msg {
                     match msg {
                         russh::ChannelMsg::Data { ref data } => {
-                            unsafe { libc::write(slave_pty, data.as_ptr() as *const libc::c_void, data.len()) };
+                            unsafe { libc::write(slave_file.as_raw_fd(), data.as_ptr() as *const libc::c_void, data.len()) };
                         }
                         _ => {}
                     }

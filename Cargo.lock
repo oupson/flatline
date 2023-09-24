@@ -432,6 +432,7 @@ dependencies = [
  "libc",
  "russh",
  "russh-keys",
+ "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
