@@ -1,4 +1,4 @@
-use adw::{prelude::*, HeaderBar};
+use adw::{prelude::*, HeaderBar, TabBar, TabView};
 
 use gtk::{Box, Orientation};
 use remote_pane::RemotePane;
@@ -6,8 +6,10 @@ use vte4::{ApplicationExt, ApplicationExtManual};
 
 use adw::{Application, ApplicationWindow};
 
+pub(crate) mod error;
 pub mod remote_pane;
 mod ssh;
+pub(crate) mod util;
 
 const APP_ID: &str = "fr.oupson.Flatline";
 
@@ -21,7 +23,16 @@ fn main() -> glib::ExitCode {
 
 fn build_ui(app: &Application) {
     let content = Box::new(Orientation::Vertical, 0);
-    content.append(&HeaderBar::new());
+    let header_bar = HeaderBar::new();
+    content.append(&header_bar);
+
+    let tab_bar = TabBar::builder().build();
+
+    content.append(&tab_bar);
+
+    let tab_view = TabView::builder().hexpand(true).vexpand(true).build();
+    content.append(&tab_view);
+    tab_bar.set_view(Some(&tab_view));
 
     let remote_pane = RemotePane::builder()
         .hexpand(true)
@@ -36,9 +47,8 @@ fn build_ui(app: &Application) {
         .server_addr("oupson.fr")
         .server_port(22)
         .build();
-    content.append(&remote_pane);
-
-    content.append(&remote_pane2);
+    tab_view.append(&remote_pane);
+    tab_view.append(&remote_pane2);
 
     let window = ApplicationWindow::builder()
         .application(app)
@@ -47,18 +57,4 @@ fn build_ui(app: &Application) {
         .build();
 
     window.present();
-}
-
-trait LibcResultExt: Sized {
-    fn as_result(self) -> Result<Self, std::io::Error>;
-}
-
-impl LibcResultExt for libc::c_int {
-    fn as_result(self) -> Result<Self, std::io::Error> {
-        if self < 0 {
-            Err(std::io::Error::last_os_error())
-        } else {
-            Ok(self)
-        }
-    }
 }

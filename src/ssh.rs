@@ -150,7 +150,6 @@ where
 
                 match guard.try_io(|g| {
                     let res = unsafe { libc::read(g.get_ref().as_raw_fd(), buf1.as_mut_ptr() as *mut libc::c_void, 512)};
-
                     if res >= 0 {
                         Ok(res as usize)
                     } else {
@@ -159,7 +158,11 @@ where
                 }) {
                     Ok(res) => {
                         let a = res.unwrap();
-                        channel.data(&buf1[0..a]).await.unwrap();
+                        if a != 0 {
+                            channel.data(&buf1[0..a]).await.unwrap();
+                        } else {
+                            break;
+                        }
                     }
 
                     Err(_would_block) => (),
@@ -167,4 +170,6 @@ where
             }
         }
     }
+
+    trace!("End of ssh loop");
 }

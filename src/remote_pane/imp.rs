@@ -12,7 +12,7 @@ use glib::{
     ObjectExt,
 };
 use gtk::{
-    subclass::widget::{WidgetClassExt, WidgetImpl, WidgetImplExt},
+    subclass::widget::{WidgetClassExt, WidgetImpl},
     Box,
 };
 use tracing::error;
@@ -68,6 +68,10 @@ impl ObjectImpl for RemotePane {
         let content = Box::builder().hexpand(true).vexpand(true).build();
         content.append(&self.term);
         content.set_parent(obj);
+
+        if let Err(e) = self.spawn_ssh_session() {
+            error!("failed to spawn ssh session : {}", e);
+        }
     }
 
     fn dispose(&self) {
@@ -78,13 +82,6 @@ impl ObjectImpl for RemotePane {
 }
 
 impl WidgetImpl for RemotePane {
-    fn map(&self) {
-        if let Err(e) = self.spawn_ssh_session() {
-            error!("failed to spawn ssh session : {}", e);
-        }
-
-        self.parent_map();
-    }
 }
 
 impl RemotePane {
