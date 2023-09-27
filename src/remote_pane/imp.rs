@@ -27,7 +27,10 @@ pub struct RemotePane {
     #[property(get, construct_only, minimum = 0, maximum = 65_535, builder())]
     server_port: OnceCell<u32>,
 
-    pub term: Terminal,
+    term: Terminal,
+
+    #[property(get, set)]
+    title: RefCell<String>,
 
     thread_handle: RefCell<Option<JoinHandle<()>>>,
 }
@@ -44,6 +47,7 @@ impl Default for RemotePane {
             term,
             server_addr: OnceCell::new(),
             server_port: OnceCell::new(),
+            title: RefCell::new(String::from("Not Connected")),
             thread_handle: RefCell::new(None),
         }
     }
@@ -69,6 +73,22 @@ impl ObjectImpl for RemotePane {
         content.append(&self.term);
         content.set_parent(obj);
 
+        self.term
+            .bind_property("window-title", obj, "title")
+            .transform_to(|bindings, term_title: String| {
+                let server_addr = bindings
+                    .target()
+                    .map(|s| s.property::<String>("server_addr"));
+
+                if term_title.is_empty() {
+                    server_addr
+                } else {
+                    server_addr.map(|s| format!("{} - {}", term_title, s))
+                }
+            })
+            .sync_create()
+            .build();
+
         if let Err(e) = self.spawn_ssh_session() {
             error!("failed to spawn ssh session : {}", e);
         }
@@ -81,8 +101,7 @@ impl ObjectImpl for RemotePane {
     }
 }
 
-impl WidgetImpl for RemotePane {
-}
+impl WidgetImpl for RemotePane {}
 
 impl RemotePane {
     fn spawn_ssh_session(&self) -> anyhow::Result<()> {
