@@ -15,8 +15,14 @@ use gtk::{
     subclass::widget::{WidgetClassExt, WidgetImpl},
     Box,
 };
-use tracing::error;
+use tokio::sync::mpsc::{self, Sender};
+use tracing::{error, warn};
 use vte4::{BoxExt, Pty, Terminal, TerminalExt, WidgetExt};
+
+pub enum RemotePaneMsg {
+    Close,
+    SizeChanged(i32, i32),
+}
 
 #[derive(glib::Properties)]
 #[properties(wrapper_type = super::RemotePane)]
@@ -33,6 +39,10 @@ pub struct RemotePane {
     title: RefCell<String>,
 
     thread_handle: RefCell<Option<JoinHandle<()>>>,
+
+    size: RefCell<(i32, i32)>,
+
+    sender: OnceCell<Sender<RemotePaneMsg>>,
 }
 
 impl Default for RemotePane {
@@ -49,6 +59,8 @@ impl Default for RemotePane {
             server_port: OnceCell::new(),
             title: RefCell::new(String::from("Not Connected")),
             thread_handle: RefCell::new(None),
+            size: RefCell::new((-1, -1)),
+            sender: OnceCell::new(),
         }
     }
 }
@@ -89,12 +101,39 @@ impl ObjectImpl for RemotePane {
             .sync_create()
             .build();
 
-        if let Err(e) = self.spawn_ssh_session() {
+        let (sender, receiver) = mpsc::channel(10);
+        {
+            let term_size = self.size.clone();
+            let sender = sender.clone();
+            self.term.connect_contents_changed(move |term| {
+                let mut term_size = term_size.borrow_mut();
+                if let Some(new_size) = term.pty().and_then(|pty| pty.size().ok()) {
+                    if new_size != *term_size {
+                        *term_size = new_size;
+                        if let Err(e) =
+                            sender.try_send(RemotePaneMsg::SizeChanged(new_size.1, new_size.0))
+                        {
+                            warn!("failed to send size data to remote : {}", e);
+                        }
+                    }
+                }
+            });
+        }
+
+        self.sender.set(sender).unwrap();
+
+        if let Err(e) = self.spawn_ssh_session(receiver) {
             error!("failed to spawn ssh session : {}", e);
         }
     }
 
     fn dispose(&self) {
+        if let Some(sender) = self.sender.get() {
+            sender.blocking_send(RemotePaneMsg::Close).unwrap();
+            if let Some(handle) = self.thread_handle.take() {
+                handle.join().unwrap();
+            }
+        }
         while let Some(child) = self.obj().first_child() {
             child.unparent();
         }
@@ -104,7 +143,7 @@ impl ObjectImpl for RemotePane {
 impl WidgetImpl for RemotePane {}
 
 impl RemotePane {
-    fn spawn_ssh_session(&self) -> anyhow::Result<()> {
+    fn spawn_ssh_session(&self, receiver: mpsc::Receiver<RemotePaneMsg>) -> anyhow::Result<()> {
         let addr = self
             .server_addr
             .get()
@@ -127,7 +166,7 @@ impl RemotePane {
                 .build()
                 .unwrap();
 
-            rt.block_on(crate::ssh::ssh(addr_with_port, slave_pty));
+            rt.block_on(crate::ssh::ssh(addr_with_port, slave_pty, receiver));
         });
         self.thread_handle.set(Some(handle));
 

@@ -23,7 +23,7 @@ fn main() -> glib::ExitCode {
 
 fn build_ui(app: &Application) {
     let content = ToolbarView::new();
-    let tab_bar = TabBar::builder().autohide(false).expand_tabs(true).build();
+    let tab_bar = TabBar::builder().autohide(false).build();
     content.add_top_bar(&tab_bar);
 
     let end_control = WindowControls::new(gtk::PackType::End);
@@ -33,13 +33,13 @@ fn build_ui(app: &Application) {
     content.set_content(Some(&tab_view));
     tab_bar.set_view(Some(&tab_view));
 
-    for _ in 0..5{
+    for _ in 0..5 {
         append_pane(
             &tab_view,
             &RemotePane::builder()
                 .hexpand(true)
                 .vexpand(true)
-                .server_addr("oupson.fr")
+                .server_addr("localhost")
                 .server_port(22)
                 .build(),
         );

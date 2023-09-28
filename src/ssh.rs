@@ -1,6 +1,6 @@
 use std::{
     ffi::CStr,
-    os::fd::{AsRawFd, RawFd, OwnedFd},
+    os::fd::{AsRawFd, OwnedFd, RawFd},
     sync::Arc,
 };
 
@@ -8,8 +8,11 @@ use russh_keys::{agent::client::AgentClient, key::PublicKey};
 use tokio::{
     io::{unix::AsyncFd, AsyncRead, Interest},
     net::ToSocketAddrs,
+    sync::mpsc,
 };
 use tracing::{error, trace};
+
+use crate::remote_pane::imp::RemotePaneMsg;
 
 struct Client {}
 
@@ -71,7 +74,7 @@ impl AsyncRead for AsyncPty {
     }
 }
 
-pub async fn ssh<A>(server_addr: A, slave_pty: OwnedFd)
+pub async fn ssh<A>(server_addr: A, slave_pty: OwnedFd, mut receiver: mpsc::Receiver<RemotePaneMsg>)
 where
     A: ToSocketAddrs,
 {
@@ -125,6 +128,15 @@ where
         .await
         .unwrap();
 
+    channel
+        .set_env(true, "TERM", "xterm-256color")
+        .await
+        .unwrap();
+    channel
+        .set_env(true, "COLORTERM", "truecolor")
+        .await
+        .unwrap();
+
     channel.request_shell(true).await.unwrap();
 
     loop {
@@ -132,6 +144,22 @@ where
 
         tokio::select! {
             biased;
+            msg = receiver.recv() => {
+                if let Some(msg) = msg {
+                    match msg {
+                        RemotePaneMsg::Close => {
+                            trace!("closing session ...");
+                            channel.close().await.unwrap();
+                            session.disconnect(russh::Disconnect::ByApplication, "", "").await.unwrap();
+                            break;
+                        }
+                        RemotePaneMsg::SizeChanged(columns, rows) => {
+                            channel.window_change(columns as u32, rows as u32, 0, 0).await.unwrap();
+                        }
+                    }
+                }
+            }
+
             msg = channel.wait() => {
                 if let Some(msg) = msg {
                     match msg {
@@ -171,5 +199,5 @@ where
         }
     }
 
-    trace!("End of ssh loop");
+    trace!("end of ssh loop");
 }
