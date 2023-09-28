@@ -1,6 +1,7 @@
 use adw::{prelude::*, TabBar, TabView, ToolbarView};
 
-use gtk::WindowControls;
+use glib::clone;
+use gtk::{Button, WindowControls};
 use remote_pane::RemotePane;
 use vte4::{ApplicationExt, ApplicationExtManual};
 
@@ -23,17 +24,27 @@ fn main() -> glib::ExitCode {
 
 fn build_ui(app: &Application) {
     let content = ToolbarView::new();
+
     let tab_bar = TabBar::builder().autohide(false).build();
     content.add_top_bar(&tab_bar);
 
+    let end_widget = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    tab_bar.set_end_action_widget(Some(&end_widget));
+
+    let button = Button::builder()
+        .icon_name("tab-new-symbolic")
+        .has_frame(false)
+        .build();
+    end_widget.append(&button);
+
     let end_control = WindowControls::new(gtk::PackType::End);
-    tab_bar.set_end_action_widget(Some(&end_control));
+    end_widget.append(&end_control);
 
     let tab_view = TabView::builder().hexpand(true).vexpand(true).build();
     content.set_content(Some(&tab_view));
     tab_bar.set_view(Some(&tab_view));
 
-    for _ in 0..5 {
+    button.connect_clicked(clone!(@weak tab_view => move |_| {
         append_pane(
             &tab_view,
             &RemotePane::builder()
@@ -43,7 +54,17 @@ fn build_ui(app: &Application) {
                 .server_port(22)
                 .build(),
         );
-    }
+    }));
+
+    append_pane(
+        &tab_view,
+        &RemotePane::builder()
+            .hexpand(true)
+            .vexpand(true)
+            .server_addr("localhost")
+            .server_port(22)
+            .build(),
+    );
 
     let window = ApplicationWindow::builder()
         .application(app)
@@ -60,4 +81,6 @@ fn append_pane(tab_view: &TabView, pane: &RemotePane) {
     pane.bind_property("title", &page, "title")
         .sync_create()
         .build();
+
+    tab_view.set_selected_page(&page);
 }
