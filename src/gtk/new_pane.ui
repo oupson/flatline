@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <template class="FlatLineNewPane" parent="GtkWidget">
+    <child>
+      <object class="AdwToolbarView">
+        <property name="bottom-bar-style">raised</property>
+        <property name="content">
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="spacing">12</property>
+            <child>
+              <object class="GtkListBox" id="entry_list">
+                <property name="selection-mode">none</property>
+                <style>
+                  <class name="boxed-list"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </property>
+        <child type="bottom">
+          <object class="GtkActionBar">
+            <property name="margin-top">6</property>
+            <property name="margin-bottom">6</property>
+            <child type="start">
+              <object class="GtkButton" id="close_pane">
+                <property name="label">Close</property>
+              </object>
+            </child>
+            <child type="end">
+              <object class="GtkButton" id="new_pane">
+                <property name="action-name">pane.new-entry</property>
+                <property name="label">Create New</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

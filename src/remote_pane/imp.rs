@@ -129,11 +129,15 @@ impl ObjectImpl for RemotePane {
 
     fn dispose(&self) {
         if let Some(sender) = self.sender.get() {
-            sender.blocking_send(RemotePaneMsg::Close).unwrap();
+            if let Err(e) = sender.blocking_send(RemotePaneMsg::Close) {
+                warn!("failed to send close event : {}", e);
+            }
+
             if let Some(handle) = self.thread_handle.take() {
                 handle.join().unwrap();
             }
         }
+
         while let Some(child) = self.obj().first_child() {
             child.unparent();
         }

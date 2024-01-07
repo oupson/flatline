@@ -1,13 +1,12 @@
-use adw::{prelude::*, TabBar, TabView, ToolbarView};
-
+use adw::{prelude::*, Application, ApplicationWindow, TabBar, TabView, ToolbarView};
 use glib::clone;
 use gtk::{Button, WindowControls};
-use remote_pane::RemotePane;
-use vte4::{ApplicationExt, ApplicationExtManual};
 
-use adw::{Application, ApplicationWindow};
+use pane::Pane;
 
 pub(crate) mod error;
+pub(crate) mod new_pane;
+mod pane;
 pub mod remote_pane;
 mod ssh;
 pub(crate) mod util;
@@ -23,7 +22,9 @@ fn main() -> glib::ExitCode {
 }
 
 fn build_ui(app: &Application) {
-    let content = ToolbarView::new();
+    let content = ToolbarView::builder()
+        .top_bar_style(adw::ToolbarStyle::Flat)
+        .build();
 
     let tab_bar = TabBar::builder().autohide(false).build();
     content.add_top_bar(&tab_bar);
@@ -47,26 +48,14 @@ fn build_ui(app: &Application) {
     button.connect_clicked(clone!(@weak tab_view => move |_| {
         append_pane(
             &tab_view,
-            &RemotePane::builder()
-                .hexpand(true)
-                .vexpand(true)
-                .server_addr("localhost")
-                .server_port(22)
-                .build(),
         );
     }));
 
-    append_pane(
-        &tab_view,
-        &RemotePane::builder()
-            .hexpand(true)
-            .vexpand(true)
-            .server_addr("localhost")
-            .server_port(22)
-            .build(),
-    );
+    append_pane(&tab_view);
 
     let window = ApplicationWindow::builder()
+        .default_width(480)
+        .default_height(360)
         .application(app)
         .title("flatline")
         .content(&content)
@@ -75,8 +64,9 @@ fn build_ui(app: &Application) {
     window.present();
 }
 
-fn append_pane(tab_view: &TabView, pane: &RemotePane) {
-    let page = tab_view.append(pane);
+fn append_pane(tab_view: &TabView) {
+    let pane = Pane::new();
+    let page = tab_view.append(&pane);
 
     pane.bind_property("title", &page, "title")
         .sync_create()
